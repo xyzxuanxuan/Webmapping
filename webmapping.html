@@ -1,0 +1,568 @@
+<html>
+    
+    <head>
+        <title>Web Mapping Renderer</title>
+        <meta name="viewport" content="initial-scale=1.0">
+        <meta charset="utf-8">
+        <style>
+            html, body {
+                height:100%;
+                width:100%;
+                margin: 0;
+                padding: 0;
+                background-color: dimgray;
+                }
+            #map {
+                position: absolute;
+                bottom: 0px;
+                left: 0px;
+                top:0px;
+                height: 100%;
+                width: 80%;
+                overflow: hidden;
+                }
+            #infobox{
+                position: absolute;
+                margin: 3px;
+                right: 2px;
+                bottom: 2px;
+                top:2px;
+                width: 19%;
+                height: 100%;
+                overflow: scroll;
+                border: 5px;
+                border-width: thin;      
+                border-color:grey;
+                border-style:solid;
+                background-color:azure; 
+            }
+            #widget1{
+                position: fixed absolute; 
+                margin-top: 10px;
+                margin-left: 5px;
+            }
+            #widget2{
+                position:absolute;
+                margin-top: 10px;
+                margin-left: 2px;
+                background-color: snow;
+                width: 99%; 
+            }
+            #title{
+                font-size: 25px;
+                width: 100%;
+                height: 30px;
+            }
+
+            #choose{
+                left: 5px;
+                width: 50%;
+                height: 30px;
+            }
+            #selectbox{
+                font-size: 15px;
+                right: 5px;
+                width: 50%;
+            }        
+            #datawrapper{
+                position: relative;
+                bottom: 0;
+            }
+            .nicebox {
+                position: absolute;
+                text-align: center;
+                font-family: "Roboto", "Arial", sans-serif;
+                font-size: 13px;
+                z-index: 5;
+                box-shadow: 0 4px 6px -4px #333;
+                padding: 5px 10px;
+                background: rgb(255,255,255);
+                background: linear-gradient(to bottom,rgba(255,255,255,1) 0%,rgba(245,245,245,1) 100%);
+                border: rgb(229, 229, 229) 1px solid;
+            }
+            #controls {
+                top: 10px;
+                left: 110px;
+                width: 300px;
+                height: 30px;
+                display: none;
+            }
+            #data-box {
+                top: 10px;
+                left: 500px;
+                height: 45px;
+                line-height: 45px;
+                display: none;
+            }
+            #legend { 
+                height: 30%; 
+                width: 86%; 
+                display: flex; 
+                display: -webkit-box; 
+                padding-top: 7px 
+            }
+            .color-key {
+                background: linear-gradient(to right,
+                  hsl(5, 69%, 54%) 0%,
+                  hsl(29, 71%, 51%) 17%,
+                  hsl(54, 74%, 47%) 33%,
+                  hsl(78, 76%, 44%) 50%,
+                  hsl(102, 78%, 41%) 67%,
+                  hsl(127, 81%, 37%) 83%,
+                  hsl(151, 83%, 34%) 100%);
+                flex: 1;
+                -webkit-box-flex: 1;
+                margin: 0 5px;
+                text-align: left;
+                font-size: 1.0em;
+                line-height: 1.0em;
+            }
+            #data-value { font-size: 2.0em; font-weight: bold }
+            #data-label { font-size: 2.0em; font-weight: normal; padding-right: 10px; }
+            #data-caret { margin-left: -5px; display: none; font-size: 14px; width: 14px}
+            
+    </style>
+
+
+<!---------GeoChart----------
+    <script type='text/javascript' src='https://www.gstatic.com/charts/loader.js'></script>
+    <script type="text/javascript" src="https://www.google.com/jsapi"></script>-->
+ 
+        
+  </head>
+    
+  <body>
+      <div id="controls" class="nicebox">
+          <div id="legend" class="nicebox">
+            <div id="censusmin"> </div>
+            <div class="color-key">
+                <span id="data-caret">◆</span>
+            </div>
+            <div id="censusmax">  </div>
+    </div>
+      
+      </div>
+    
+    <div id="data-box" class="nicebox">
+        <label id="data-label" for="data-value"></label>
+        <span id="data-value"></span>
+    </div>
+    <div id="map">
+    </div>
+    <script>
+        var map;
+        function initMap() {
+              map = new google.maps.Map(document.getElementById('map'), {
+                 center: {lat: 39.5, lng: -98.35},
+                 zoom: 4
+             });
+            
+            map.data.loadGeoJson("https://github.com/jgoodall/us-maps/blob/master/geojson/state.geo.json");
+            map.data.setStyle(styleFeature);
+            map.data.addListener('mouseover', mouseInToRegion);
+            map.data.addListener('mouseout', mouseOutOfRegion);
+         }
+    </script>
+    
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBgAo4kGHDhSLBYaPYLQt1JX4kjjJHQ4P0&callback=initMap"
+              async defer></script>
+    
+        
+    <div id="infobox" >
+        <div class="widget" id="widget1">
+            <a id="title">Population Estimation</a>
+            <input type="file" id="filepath" onChange="filechange()"/> 
+            <a id="choose">Choose a year:</a>
+            <select id="selectbox" onChange="selected_index_change('selectbox')">
+            </select>
+               
+        </div>
+           
+        <div class="widget" id="widget2">
+        </div>  
+      
+    </div>
+    
+    <script type="text/javascript" src="js/papaparse.js"></script>
+    
+    <script type='text/javascript'>
+        
+        var data;
+        var yearnum;
+        
+//--Geochart        
+//      google.charts.load('current', {'packages': ['geochart']});
+        
+        function selected_index_change(name)
+        {
+            var sel=document.getElementById(name);
+            document.getElementById('data-box').style.display = 'none';
+            document.getElementById('controls').style.display='block';
+            
+            yearnum=sel.value;
+            
+            if(document.getElementById('datawrapper'))
+                {
+                    var ta=document.getElementById('datawrapper');
+                    ta.parentNode.removeChild(ta);
+                }
+            else{}
+            
+            if(yearnum&&data)
+                {
+                    var tablewid=document.getElementById("widget2");
+                    var tableform=document.createElement("table");
+                    tableform.id='datawrapper';
+                    tableform.border='1';
+
+                    var tablebody=document.createElement('tbody');
+                    tableform.appendChild(tablebody);
+
+                    var formtr=document.createElement('tr');
+                    tablebody.appendChild(formtr);
+                    //----Name----/// 
+                    var formtd=document.createElement("td");
+                    formtd.width='40';
+                    formtd.appendChild(document.createTextNode("Name"));
+                    formtr.appendChild(formtd);
+                    //----year----///
+
+                    var formtdy=document.createElement("td");
+                    formtdy.width='40';
+                    formtdy.appendChild(document.createTextNode(yearnum));
+                    formtr.appendChild(formtdy); 
+
+                    for(var x=0;x<data.length;x++)
+                        {
+                            if(data[x]["Name"])
+                                {
+                                    var datasin=data[x];
+                                    var statename=datasin["Name"];
+                                    var yearpop=datasin[yearnum];
+
+                                    var formtr=document.createElement('tr');
+                                    tablebody.appendChild(formtr);
+                                    //----Name----/// 
+                                    var formtd=document.createElement("td");
+                                    formtd.width='40';
+                                    formtd.appendChild(document.createTextNode(statename));
+                                    formtr.appendChild(formtd);
+                                    //----year----///
+
+                                    var formtdy=document.createElement("td");
+                                    formtdy.width='40';
+                                    formtdy.appendChild(document.createTextNode(yearpop));
+                                    formtr.appendChild(formtdy);
+                                }
+                            else
+                                {
+                                }                                            
+
+                        }
+
+                    tablewid.appendChild(tableform);      
+                }
+            else
+                {
+                }
+            
+            document.getElementById("data-box").firstChild.nextSibling.textContent=" ";
+            document.getElementById("data-box").firstChild.nextSibling.nextSibling.nextSibling.textContent=" ";
+            drawmapdata();
+            map.data.setStyle(styleFeature);
+        }
+
+        function filechange()
+        {
+            filename=document.getElementById("filepath").files;
+            if(filename.length)
+            {
+                var selbox=document.getElementById("selectbox");
+                for(var s=selbox.options.length-1;s>=0;s--)
+                    {
+                        selbox.remove(s);
+                    }
+                try
+                    {
+                        Papa.parse(filename[0], {
+                            header: true,
+	                        complete: function(results) {
+                                
+                                var spt=document.createElement("option");
+                                spt.appendChild(document.createTextNode("  "));
+                                selbox.appendChild(spt);
+                                
+                                Object.keys(results.data[0]).forEach(function(key)
+                                                                    {
+                                    var kval=parseInt(key);
+                                    if(kval)
+                                        {
+                                            var opt=document.createElement("option");
+                                            opt.appendChild(document.createTextNode(kval));
+                                            selbox.appendChild(opt);
+                                        }
+                                    else{}
+                                })
+                                
+ //                               document.getElementById("selectbox").appendChild
+                                
+//		                        console.log("Finished:", results.data);
+/////------load data to form according to the chosen year------------------------------------///
+                                if(yearnum)
+                                    {
+                                        var tablewid=document.getElementById("widget2");
+                                        var tableform=document.createElement("table");
+                                        tableform.id='datawrapper';
+                                        tableform.border='1';
+                                        tableform.width=tablewid.width;
+                                        
+                                        var tablebody=document.createElement('tbody');
+                                        tableform.appendChild(tablebody);
+                                        
+                                        var formtr=document.createElement('tr');
+                                        tablebody.appendChild(formtr);
+                                        //----Name----/// 
+                                        var formtd=document.createElement("td");
+                                        formtd.width='40';
+                                        formtd.appendChild(document.createTextNode("Name"));
+                                        formtr.appendChild(formtd);
+                                        //----year----///
+
+                                        var formtdy=document.createElement("td");
+                                        formtdy.width='40';
+                                        formtdy.appendChild(document.createTextNode(yearnum));
+                                        formtr.appendChild(formtdy); 
+                                        
+                                        for(var x=0;x<results.data.length;x++)
+                                            {
+                                                if(results.data[x]["Name"])
+                                                    {
+                                                        var datasin=results.data[x];
+                                                        var statename=datasin["Name"];
+                                                        var yearpop=datasin[yearnum];
+
+                                                        var formtr=document.createElement('tr');
+                                                        tablebody.appendChild(formtr);
+                                                        //----Name----/// 
+                                                        var formtd=document.createElement("td");
+                                                        formtd.width=tablewid.width/2;
+                                                        formtd.appendChild(document.createTextNode(statename.replace(".","")));
+                                                        formtr.appendChild(formtd);
+                                                        //----year----///
+
+                                                        var formtdy=document.createElement("td");
+                                                        formtdy.width=tablewid.width/2;
+                                                        formtdy.appendChild(document.createTextNode(yearpop));
+                                                        formtr.appendChild(formtdy);
+                                                    }
+                                                else
+                                                    {
+                                                    }                                              
+                                            }
+                                        
+                                        tablewid.appendChild(tableform);      
+                                    }
+                                else
+                                    {
+                                    }
+                                                      
+////-------Render map according to data ------------------------------------------------///
+                                data=results.data;
+ //                               console.log(typeof(data));
+                                                               
+// ----Draw geochart-------
+//                              google.charts.setOnLoadCallback(drawmapdata);
+            
+                                drawmapdata();
+                                map.data.setStyle(styleFeature);
+                                
+                                
+	                       }
+                        }); 
+                    }                   
+                    catch (ex) 
+                    {
+                        alert(ex);
+                    }
+             } 
+             else
+                {
+                    alert("Choose File Path!");
+                }
+         }
+        
+        
+        
+        var maxvariable;
+        var minvariable;
+        
+        function drawmapdata()
+        {
+            maxvariable=parseInt(data[0][yearnum]);
+            minvariable=parseInt(data[0][yearnum]);
+            
+            var i=0;
+            
+            map.data.forEach(function(record)
+                           {
+                                var convariable=parseInt(data[i][yearnum]);
+                                var sname=data[i]["Name"];
+
+                                if (convariable < minvariable) {
+                                    minvariable = convariable;
+                                  }
+                                if (convariable > maxvariable) {
+                                    maxvariable = convariable;
+                                  }
+                                    
+                                for(var count=0;count<data.length;count++)
+                                    {
+                                        if(data[count]["Name"]==record.getProperty("NAME10"))
+                                            {
+                                                record.setProperty('population',data[count][yearnum]);
+ //                                               console.log(record.getProperty("NAME10"),record.getProperty("population"));
+                                            }
+                                        else
+                                        {
+                                        }
+                                    }              
+                                i++;
+                        })
+            var minval=minvariable.toString();
+            var d1=document.getElementById("censusmin");
+ //           console.log(minval);
+            d1.textContent=minval;
+            document.getElementById('censusmax').textContent =maxvariable.toString();
+            
+            
+        
+            
+            /*----------Using FusionTable,not working------
+            console.log("in");
+            var layer = new google.maps.FusionTablesLayer({
+                query: {
+                    select: 'Name',
+                    from: '1BQSGOJPwqVMeiyWVK8XkmxQ2SyE6rQWwO6OgQj3_'
+                        },
+                styles: [{
+                    polygonOptions: {
+                        fillColor: '#00FF00',
+                        fillOpacity: 0.3
+                            }
+                        }, 
+                         {
+                            where: '2010 > 6000000',
+                            polygonOptions: {fillColor: '#0000FF'}
+                        }, 
+                         {
+                            where: '2010 > 18000000',
+                            polygonOptions: {fillOpacity: 1.0}
+                        }]
+                });
+            layer.setMap(map);*/
+            
+            
+            /*-------------Draw GeoChart ----------
+            var renderdata = new google.visualization.DataTable();
+            renderdata.addColumn('string', 'Country');
+            renderdata.addColumn('number', 'Population');
+
+            for(var i=0;i<data.length;i++)
+                {
+                    if(data[i]["Name"])
+                        {
+                            console.log("in");
+                            var dotname=data[i]["Name"];
+                            var pname=dotname.replace(".","")
+                            var dotpop=data[i][yearnum];
+                            var dfpop=dotpop.split(",").join("");
+                            var popnum=parseInt(dfpop);
+                            console.log(pname,dfpop);
+                            renderdata.addRows([[pname,popnum]]);
+                        }
+                    else
+                        {
+                        }
+                }
+            
+            var options = {
+                region: 'US',
+                displayMode: 'region',
+                resolution: 'provinces',
+                colorAxis: {colors: ['#00853f', 'black', '#e31b23']},
+                backgroundColor: '#81d4fa',
+                datalessRegionColor: '#f8bbd0',
+                defaultColor: '#f5f5f5',
+    };
+
+
+            var chart = new google.visualization.GeoChart(document.getElementById('map'));
+
+            chart.draw(renderdata, options);*/
+        }
+        
+        function styleFeature(feature) 
+        {
+            var low = [5, 69, 54];  // color of smallest datum
+            var high = [151, 83, 34];   // color of largest datum
+
+            // delta represents where the value sits between the min and max
+            var delta = (feature.getProperty('population') - minvariable) /
+                  (maxvariable - minvariable);
+
+            var color = [];
+            for (var i = 0; i < 3; i++) {
+                // calculate an integer color based on the delta
+                color[i] = (high[i] - low[i]) * delta + low[i];
+              }
+
+            // determine whether to show this shape or not
+            var showRow = true;
+            if (feature.getProperty('population') == null ||
+                  isNaN(feature.getProperty('population'))) {
+                showRow = false;
+              }
+
+              var outlineWeight = 0.5, zIndex = 1;
+              if (feature.getProperty('NAME10') === 'hover') {
+                outlineWeight = zIndex = 2;
+              }
+
+              return {
+                strokeWeight: outlineWeight,
+                strokeColor: '#fff',
+                zIndex: zIndex,
+                fillColor: 'hsl(' + color[0] + ',' + color[1] + '%,' + color[2] + '%)',
+                fillOpacity: 0.75,
+                visible: showRow
+              };
+        }
+        
+        function mouseInToRegion(e) 
+        {
+          // set the hover state so the setStyle function can change the border
+              e.feature.setProperty('state', 'hover');
+
+              var percent = (e.feature.getProperty('population') - minvariable) /
+                  (maxvariable - minvariable) * 100;
+
+              // update the label
+            
+              document.getElementById('data-label').textContent =e.feature.getProperty('NAME10');
+              document.getElementById('data-value').textContent =e.feature.getProperty('population').toLocaleString();
+              document.getElementById('data-box').style.display = 'block';
+             
+              document.getElementById('data-caret').style.display = 'block';
+              document.getElementById('data-caret').style.paddingLeft = percent + '%';
+        }
+        
+        function mouseOutOfRegion(e) 
+        {
+          // reset the hover state, returning the border to normal
+            e.feature.setProperty('state', 'normal');
+        }
+
+    </script>
+    
+  </body>
+</html>
